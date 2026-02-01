@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Training Plan ICS Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .day-card { transition: all 0.2s ease; }
+        .day-card:hover { transform: translateY(-2px); }
+        .rest-day { background-color: #f3f4f6; color: #9ca3af; }
+        .active-day { background-color: #ffffff; border-left: 4px solid #3b82f6; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-900">
+
+    <div class="max-w-5xl mx-auto py-10 px-4">
+        <header class="mb-10 text-center">
+            <h1 class="text-4xl font-extrabold text-slate-800 tracking-tight mb-2">Training Plan Creator</h1>
+            <p class="text-slate-600">Plan backwards from your race date and export to your calendar.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Configuration Panel -->
+            <div class="lg:col-span-1 space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-bold mb-4 flex items-center">
+                        <span class="bg-blue-100 text-blue-600 p-2 rounded-lg mr-2">1</span> 
+                        Setup Race
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Race Date</label>
+                            <input type="date" id="raceDate" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-100">
+                            <h3 class="text-sm font-bold text-slate-700 mb-3">Option 1: Empty Grid</h3>
+                            <div class="flex space-x-2">
+                                <input type="number" id="weekCount" placeholder="Weeks" min="1" max="52" class="w-24 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                                <button onclick="generateEmptyGrid()" class="flex-1 bg-slate-800 text-white font-bold py-3 px-4 rounded-xl hover:bg-slate-700 transition-colors">Create Empty</button>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-100">
+                            <h3 class="text-sm font-bold text-slate-700 mb-3">Option 2: Bulk Paste</h3>
+                            <textarea id="bulkPaste" rows="5" 
+                                placeholder="Paste data here...&#10;Tab-separated (Excel) or Quoted items.&#10;Empty, 'Off', or 'Rest day' = Rest Day." 
+                                class="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"></textarea>
+                            <button onclick="generateFromPaste()" class="w-full mt-2 bg-blue-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-blue-500 transition-colors">Import & Create</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="exportAction" class="hidden">
+                    <button onclick="downloadICS()" class="w-full bg-emerald-600 text-white font-bold py-5 px-6 rounded-2xl shadow-lg shadow-emerald-100 hover:bg-emerald-500 transition-all flex items-center justify-center space-x-2">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        <span>Download Plan (.ics)</span>
+                    </button>
+                    <p class="text-center text-xs text-slate-400 mt-3 italic">Verify your entries before downloading.</p>
+                </div>
+            </div>
+
+            <!-- Preview/Grid Panel -->
+            <div class="lg:col-span-2">
+                <div id="gridContainer" class="hidden space-y-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="text-xl font-bold text-slate-800">Your Training Plan</h2>
+                        <span id="dayCountLabel" class="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full"></span>
+                    </div>
+                    
+                    <div id="planGrid" class="grid grid-cols-1 gap-3 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
+                        <!-- Days injected here -->
+                    </div>
+                </div>
+
+                <div id="emptyState" class="h-full flex flex-col items-center justify-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-slate-400">
+                    <svg class="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <p class="text-lg">Set a race date and choose an input option to start</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPlan = [];
+
+        function parseInput(text) {
+            if (!text.trim()) return [];
+            // Handle Tab-separated or Quoted values
+            // Matches text inside quotes OR text separated by tabs/newlines
+            const regex = /"([^"]*)"|([^\t\n\r]+)/g;
+            const items = [];
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                const val = (match[1] || match[2]).trim();
+                if (val !== undefined) items.push(val);
+            }
+            return items;
+        }
+
+        function isRest(text) {
+            if (!text) return true;
+            const t = text.toLowerCase().trim();
+            return t === "" || t === "off" || t === "rest day" || t === "descanso";
+        }
+
+        function generateEmptyGrid() {
+            const raceDateVal = document.getElementById('raceDate').value;
+            const weeks = parseInt(document.getElementById('weekCount').value);
+            
+            if (!raceDateVal || isNaN(weeks)) {
+                alert("Please select a race date and enter number of weeks.");
+                return;
+            }
+
+            const items = new Array(weeks * 7).fill("");
+            processItems(items, raceDateVal);
+        }
+
+        function generateFromPaste() {
+            const raceDateVal = document.getElementById('raceDate').value;
+            const rawText = document.getElementById('bulkPaste').value;
+            
+            if (!raceDateVal || !rawText.trim()) {
+                alert("Please select a race date and paste some training data.");
+                return;
+            }
+
+            const items = parseInput(rawText);
+            processItems(items, raceDateVal);
+        }
+
+        function processItems(items, raceDateStr) {
+            const raceDate = new Date(raceDateStr);
+            currentPlan = [];
+
+            // We iterate backwards from the race date
+            // Index 0 of items is the furthest day in the past
+            // Last item is the race day (or day before race)
+            
+            for (let i = 0; i < items.length; i++) {
+                const daysOffset = (items.length - 1) - i;
+                const date = new Date(raceDate);
+                date.setDate(date.getDate() - daysOffset);
+
+                const content = items[i];
+                currentPlan.push({
+                    id: i,
+                    date: date,
+                    content: content,
+                    isActive: !isRest(content)
+                });
+            }
+
+            renderGrid();
+        }
+
+        function toggleDay(id) {
+            const day = currentPlan.find(d => d.id === id);
+            if (day) {
+                day.isActive = !day.isActive;
+                renderGrid();
+            }
+        }
+
+        function updateContent(id, value) {
+            const day = currentPlan.find(d => d.id === id);
+            if (day) day.content = value;
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('planGrid');
+            grid.innerHTML = '';
+            
+            currentPlan.forEach(day => {
+                const dateStr = day.date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+                const isRaceDay = day.id === currentPlan.length - 1;
+                
+                const card = document.createElement('div');
+                card.className = `day-card p-4 rounded-xl border flex items-center space-x-4 ${day.isActive ? 'active-day border-slate-200' : 'rest-day border-transparent'}`;
+                
+                card.innerHTML = `
+                    <div class="w-24 shrink-0">
+                        <div class="text-[10px] font-bold uppercase tracking-tighter opacity-60">${day.date.getFullYear()}</div>
+                        <div class="text-sm font-bold">${dateStr}</div>
+                    </div>
+                    <div class="flex-1">
+                        <input type="text" 
+                            oninput="updateContent(${day.id}, this.value)" 
+                            value="${day.content}" 
+                            placeholder="${day.isActive ? 'Training details...' : 'Rest Day'}"
+                            class="w-full bg-transparent border-none focus:ring-0 text-sm font-medium placeholder:opacity-50">
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        ${isRaceDay ? '<span class="text-[10px] bg-red-100 text-red-600 font-bold px-2 py-1 rounded">RACE</span>' : ''}
+                        <button onclick="toggleDay(${day.id})" class="p-2 rounded-lg hover:bg-slate-200 transition-colors">
+                            <svg class="w-5 h-5 ${day.isActive ? 'text-blue-500' : 'text-slate-400'}" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('gridContainer').classList.remove('hidden');
+            document.getElementById('exportAction').classList.remove('hidden');
+            document.getElementById('dayCountLabel').innerText = `${currentPlan.length} Days Planned`;
+        }
+
+        function formatDateToICS(date) {
+            return date.toISOString().split('T')[0].replace(/-/g, '') + 'T090000Z';
+        }
+
+        function downloadICS() {
+            if (currentPlan.length === 0) return;
+
+            const raceDateVal = document.getElementById('raceDate').value;
+            let icsContent = [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//Training Planner//EN',
+                'CALSCALE:GREGORIAN',
+                'METHOD:PUBLISH'
+            ];
+
+            currentPlan.forEach(day => {
+                if (!day.isActive) return;
+
+                const start = formatDateToICS(day.date);
+                // End date is 1 hour later for the entry
+                const endDate = new Date(day.date);
+                endDate.setHours(endDate.getHours() + 1);
+                const end = formatDateToICS(endDate);
+
+                icsContent.push('BEGIN:VEVENT');
+                icsContent.push(`DTSTART:${start}`);
+                icsContent.push(`DTEND:${end}`);
+                icsContent.push(`SUMMARY:${day.content || 'Training'}`);
+                icsContent.push('DESCRIPTION:Automatically generated training session.');
+                icsContent.push('STATUS:CONFIRMED');
+                icsContent.push('END:VEVENT');
+            });
+
+            icsContent.push('END:VCALENDAR');
+
+            const blob = new Blob([icsContent.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.setAttribute('download', `Training_Plan_Race_${raceDateVal}.ics`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

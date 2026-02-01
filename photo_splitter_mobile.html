@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dynamic Image Splitter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { touch-action: manipulation; }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 65vh;
+            background: #cbd5e1;
+            overflow: hidden;
+            border-radius: 1rem;
+            cursor: crosshair;
+        }
+        #imageCanvas {
+            position: absolute;
+            transform-origin: 0 0;
+            pointer-events: none;
+        }
+        .handle {
+            position: absolute;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            background: #2563eb;
+            color: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            border: 2px solid white;
+            touch-action: none;
+        }
+        .handle-v { width: 40px; height: 50px; border-radius: 8px; cursor: ew-resize; top: 0; margin-left: -20px; }
+        .handle-h { width: 50px; height: 40px; border-radius: 8px; cursor: ns-resize; left: 0; margin-top: -20px; }
+        
+        .handle .delete-btn {
+            position: absolute;
+            background: #ef4444;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid white;
+        }
+        .handle-v .delete-btn { top: -8px; right: -8px; }
+        .handle-h .delete-btn { top: -8px; right: -8px; }
+
+        .line {
+            position: absolute;
+            pointer-events: none;
+            background: #2563eb;
+            z-index: 50;
+        }
+        .line-v { width: 2px; height: 100%; }
+        .line-h { height: 2px; width: 100%; }
+        
+        input[type=range] { accent-color: #2563eb; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+<div class="max-w-4xl mx-auto p-4 flex flex-col h-screen">
+    <header class="flex justify-between items-center mb-4">
+        <h1 class="text-xl font-bold tracking-tight">Image Splitter</h1>
+        <button id="resetBtn" class="text-sm font-semibold text-slate-500 hover:text-red-500">Reset All</button>
+    </header>
+
+    <!-- Upload State -->
+    <div id="uploadZone" class="flex-1 flex flex-col items-center justify-center border-4 border-dashed border-slate-200 rounded-3xl bg-white p-6 mb-4 cursor-pointer hover:border-blue-400 transition-colors">
+        <input type="file" id="fileInput" accept="image/*" class="hidden">
+        <div class="text-center" id="uploadPrompt">
+            <div class="bg-blue-100 text-blue-600 p-4 rounded-full inline-block mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <p class="text-lg font-medium">Upload an Image</p>
+            <p class="text-slate-400 text-sm">Tap to browse or paste here</p>
+        </div>
+    </div>
+
+    <!-- Editor State (Hidden initially) -->
+    <div id="editorUI" class="hidden flex-1 flex flex-col space-y-4 min-h-0">
+        <div class="flex flex-wrap gap-2 items-center justify-between bg-white p-3 rounded-2xl shadow-sm">
+            <div class="flex gap-2">
+                <button id="addV" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+                    <span>+</span> Vert
+                </button>
+                <button id="addH" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+                    <span>+</span> Horiz
+                </button>
+            </div>
+            <div class="flex items-center gap-3 flex-1 justify-end">
+                <span class="text-xs font-bold text-slate-400 uppercase">Zoom</span>
+                <input type="range" id="zoomCtrl" min="0.1" max="3" step="0.1" value="1" class="w-24 md:w-40">
+            </div>
+        </div>
+
+        <div id="viewport" class="canvas-container shadow-inner">
+            <canvas id="imageCanvas"></canvas>
+            <div id="interactionLayer" class="absolute inset-0 pointer-events-none"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <button id="panMode" class="bg-slate-200 text-slate-700 py-3 rounded-2xl font-bold text-sm active:bg-blue-600 active:text-white transition-all">🖐️ Pan/Zoom</button>
+            <button id="exportBtn" class="bg-emerald-600 text-white py-3 rounded-2xl font-bold text-sm shadow-lg shadow-emerald-200">✂️ Split & Save</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const fileInput = document.getElementById('fileInput');
+    const uploadZone = document.getElementById('uploadZone');
+    const editorUI = document.getElementById('editorUI');
+    const canvas = document.getElementById('imageCanvas');
+    const ctx = canvas.getContext('2d');
+    const viewport = document.getElementById('viewport');
+    const interactionLayer = document.getElementById('interactionLayer');
+    const zoomCtrl = document.getElementById('zoomCtrl');
+    
+    let img = new Image();
+    let zoom = 1;
+    let panX = 0;
+    let panY = 0;
+    let vGuides = []; // 0 to 1 ratios
+    let hGuides = []; // 0 to 1 ratios
+    let activeDrag = null;
+    let startX, startY;
+
+    // --- Core Logic ---
+    uploadZone.onclick = () => fileInput.click();
+    
+    fileInput.onchange = e => {
+        const file = e.target.files[0];
+        if (file) handleImage(file);
+    };
+
+    document.onpaste = e => {
+        const item = e.clipboardData.items[0];
+        if (item?.type.includes('image')) handleImage(item.getAsFile());
+    };
+
+    function handleImage(file) {
+        const reader = new FileReader();
+        reader.onload = re => { img.src = re.target.result; };
+        reader.readAsDataURL(file);
+    }
+
+    img.onload = () => {
+        uploadZone.classList.add('hidden');
+        editorUI.classList.remove('hidden');
+        
+        // Initial Fit
+        const scale = Math.min(viewport.clientWidth / img.width, viewport.clientHeight / img.height);
+        zoom = scale * 0.9;
+        zoomCtrl.value = zoom;
+        panX = (viewport.clientWidth - img.width * zoom) / 2;
+        panY = (viewport.clientHeight - img.height * zoom) / 2;
+        
+        render();
+    };
+
+    function render() {
+        if (!img.src) return;
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+        canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+
+        ctx.drawImage(img, 0, 0);
+
+        interactionLayer.innerHTML = '';
+        const w = img.width * zoom;
+        const h = img.height * zoom;
+
+        vGuides.forEach((g, i) => {
+            const x = g * w + panX;
+            const line = document.createElement('div');
+            line.className = 'line line-v';
+            line.style.left = x + 'px';
+            line.style.top = panY + 'px';
+            line.style.height = h + 'px';
+            interactionLayer.appendChild(line);
+
+            const handle = document.createElement('div');
+            handle.className = 'handle handle-v';
+            handle.style.left = x + 'px';
+            handle.style.top = (panY - 50) + 'px'; // Handle above image
+            handle.innerHTML = '↔';
+            handle.onpointerdown = (e) => startDrag(e, 'v', i);
+            
+            const del = document.createElement('div');
+            del.className = 'delete-btn';
+            del.innerHTML = '✕';
+            del.onpointerdown = (e) => { e.stopPropagation(); vGuides.splice(i, 1); render(); };
+            handle.appendChild(del);
+            
+            interactionLayer.appendChild(handle);
+        });
+
+        hGuides.forEach((g, i) => {
+            const y = g * h + panY;
+            const line = document.createElement('div');
+            line.className = 'line line-h';
+            line.style.top = y + 'px';
+            line.style.left = panX + 'px';
+            line.style.width = w + 'px';
+            interactionLayer.appendChild(line);
+
+            const handle = document.createElement('div');
+            handle.className = 'handle handle-h';
+            handle.style.top = y + 'px';
+            handle.style.left = (panX - 50) + 'px'; // Handle left of image
+            handle.innerHTML = '↕';
+            handle.onpointerdown = (e) => startDrag(e, 'h', i);
+
+            const del = document.createElement('div');
+            del.className = 'delete-btn';
+            del.innerHTML = '✕';
+            del.onpointerdown = (e) => { e.stopPropagation(); hGuides.splice(i, 1); render(); };
+            handle.appendChild(del);
+
+            interactionLayer.appendChild(handle);
+        });
+    }
+
+    // --- Interaction ---
+    function startDrag(e, type, index) {
+        e.preventDefault();
+        activeDrag = { type, index };
+        startX = e.clientX;
+        startY = e.clientY;
+        viewport.setPointerCapture(e.pointerId);
+    }
+
+    viewport.onpointermove = (e) => {
+        if (!activeDrag) return;
+        
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        startX = e.clientX;
+        startY = e.clientY;
+
+        if (activeDrag.type === 'v') {
+            const imgWidthOnScreen = img.width * zoom;
+            vGuides[activeDrag.index] += dx / imgWidthOnScreen;
+            vGuides[activeDrag.index] = Math.max(0, Math.min(1, vGuides[activeDrag.index]));
+        } else {
+            const imgHeightOnScreen = img.height * zoom;
+            hGuides[activeDrag.index] += dy / imgHeightOnScreen;
+            hGuides[activeDrag.index] = Math.max(0, Math.min(1, hGuides[activeDrag.index]));
+        }
+        render();
+    };
+
+    viewport.onpointerup = () => { activeDrag = null; };
+
+    // Pan & Zoom logic
+    let isPanning = false;
+    viewport.onmousedown = (e) => { 
+        if(e.target === viewport) {
+            isPanning = true; 
+            startX = e.clientX; 
+            startY = e.clientY; 
+        }
+    };
+    window.onmousemove = (e) => {
+        if (!isPanning) return;
+        panX += e.clientX - startX;
+        panY += e.clientY - startY;
+        startX = e.clientX;
+        startY = e.clientY;
+        render();
+    };
+    window.onmouseup = () => isPanning = false;
+
+    zoomCtrl.oninput = (e) => {
+        const newZoom = parseFloat(e.target.value);
+        const ratio = newZoom / zoom;
+        // Zoom relative to center of viewport
+        const cx = viewport.clientWidth / 2;
+        const cy = viewport.clientHeight / 2;
+        panX = cx - (cx - panX) * ratio;
+        panY = cy - (cy - panY) * ratio;
+        zoom = newZoom;
+        render();
+    };
+
+    document.getElementById('addV').onclick = () => { vGuides.push(0.5); render(); };
+    document.getElementById('addH').onclick = () => { hGuides.push(0.5); render(); };
+    document.getElementById('resetBtn').onclick = () => location.reload();
+
+    // --- Export ---
+    document.getElementById('exportBtn').onclick = () => {
+        const sortedV = [0, ...[...vGuides].sort((a,b) => a-b), 1];
+        const sortedH = [0, ...[...hGuides].sort((a,b) => a-b), 1];
+        
+        const tempCanvas = document.createElement('canvas');
+        const tCtx = tempCanvas.getContext('2d');
+        const baseName = "split_image_" + Date.now();
+
+        let count = 1;
+        for (let i = 0; i < sortedH.length - 1; i++) {
+            for (let j = 0; j < sortedV.length - 1; j++) {
+                const sx = sortedV[j] * img.width;
+                const sy = sortedH[i] * img.height;
+                const sw = (sortedV[j+1] - sortedV[j]) * img.width;
+                const sh = (sortedH[i+1] - sortedH[i]) * img.height;
+
+                tempCanvas.width = sw;
+                tempCanvas.height = sh;
+                tCtx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+                const link = document.createElement('a');
+                link.download = `${baseName}_row${i+1}_col${j+1}.jpg`;
+                link.href = tempCanvas.toDataURL('image/jpeg', 0.92);
+                link.click();
+                count++;
+            }
+        }
+    };
+</script>
+
+</body>
+</html>

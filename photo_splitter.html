@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Splitter Tool</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --bg-color: #f4f7f6;
+            --text-color: #333;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 900px;
+        }
+
+        h1 { text-align: center; margin-bottom: 25px; }
+
+        .control-group { margin-bottom: 20px; }
+        .control-group label { display: block; margin-bottom: 8px; font-weight: 600; }
+        .control-group input[type="text"], .control-group input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        .paste-area {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            color: #777;
+            border-radius: 6px;
+            margin-top: 10px;
+            background: #fafafa;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 25px;
+        }
+
+        button {
+            padding: 12px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        button:hover { background-color: #0056b3; }
+        button.secondary { background-color: #6c757d; }
+        button.secondary:hover { background-color: #545b62; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        #editor-section, #results-section { display: none; /* Hidden initially */ }
+
+        .canvas-container {
+            width: 100%;
+            overflow: auto;
+            border: 2px solid #eee;
+            position: relative;
+            /* Max height for scrollability on tall images */
+            max-height: 70vh; 
+            cursor: crosshair;
+        }
+        
+        /* Canvas needs to be block to avoid bottom spacing issues */
+        canvas { display: block; }
+
+        .thumbnails-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .thumbnail-item {
+            text-align: center;
+            border: 1px solid #eee;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .thumbnail-item img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Image Splitter</h1>
+
+        <div class="control-group">
+            <label for="fileInput">1. Select Photo</label>
+            <input type="file" id="fileInput" accept="image/*">
+            <div class="paste-area">or paste an image here (Ctrl+V / Cmd+V)</div>
+        </div>
+
+        <div class="control-group">
+            <label for="fileNameTemplate">2. Filename Template</label>
+            <input type="text" id="fileNameTemplate" placeholder="e.g., my-vacation-split" value="split-image">
+        </div>
+
+        <div class="control-group">
+            <label>3. Choose Split Mode</label>
+            <div class="btn-group">
+                <button id="btn3H" disabled>3 Horizontal Strips</button>
+                <button id="btn3V" disabled>3 Vertical Strips</button>
+                <button id="btnGrid" disabled>4 Photos (2x2 Grid)</button>
+            </div>
+        </div>
+
+        <div id="editor-section">
+            <h3>Review and Adjust Guidelines</h3>
+            <p style="color: #666; font-size: 0.9em;">Drag the cyan lines to adjust cuts.</p>
+            <div class="canvas-container">
+                <canvas id="imageCanvas"></canvas>
+            </div>
+            <div class="btn-group" style="margin-top: 20px;">
+                <button id="generateBtn">Generate Subphotos</button>
+                <button id="cancelBtn" class="secondary">Cancel</button>
+            </div>
+        </div>
+
+        <div id="results-section">
+            <h3>Results</h3>
+            <div class="btn-group">
+                 <button id="downloadAllBtn">Download All</button>
+                 <button id="newImageBtn" class="secondary">Start Over</button>
+            </div>
+            <div class="thumbnails-grid" id="thumbnailsContainer">
+                </div>
+        </div>
+    </div>
+
+
+<script>
+    // === Elements ===
+    const fileInput = document.getElementById('fileInput');
+    const templateInput = document.getElementById('fileNameTemplate');
+    const btn3H = document.getElementById('btn3H');
+    const btn3V = document.getElementById('btn3V');
+    const btnGrid = document.getElementById('btnGrid');
+    const editorSection = document.getElementById('editor-section');
+    const resultsSection = document.getElementById('results-section');
+    const canvas = document.getElementById('imageCanvas');
+    const ctx = canvas.getContext('2d');
+    const generateBtn = document.getElementById('generateBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const thumbnailsContainer = document.getElementById('thumbnailsContainer');
+    const downloadAllBtn = document.getElementById('downloadAllBtn');
+    const newImageBtn = document.getElementById('newImageBtn');
+
+    // === State ===
+    let loadedImage = null;
+    let currentMode = null; // '3H', '3V', 'GRID'
+    // Arrays to store normalized positions (0.0 to 1.0) of the guides
+    let hGuides = []; 
+    let vGuides = [];
+    let isDragging = false;
+    let draggedGuide = null; // { type: 'h' or 'v', index: 0 }
+    const guideHitTolerance = 10; // pixels space around line to grab it
+    let generatedBlobs = []; // Store generated images ready for download
+
+    // === Event Listeners: Image Loading ===
+
+    // Handle File Input
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+            loadImage(e.target.files[0]);
+        }
+    });
+
+    // Handle Paste
+    document.addEventListener('paste', (e) => {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (let item of items) {
+            if (item.type.indexOf('image') === 0) {
+                const blob = item.getAsFile();
+                loadImage(blob);
+                // Clear file input value so paste takes precedence visually if needed
+                fileInput.value = ''; 
+                return;
+            }
+        }
+    });
+
+    function loadImage(file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                loadedImage = img;
+                enableModeButtons();
+                resetUIState();
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function enableModeButtons() {
+        btn3H.disabled = false;
+        btn3V.disabled = false;
+        btnGrid.disabled = false;
+    }
+
+    function resetUIState() {
+        editorSection.style.display = 'none';
+        resultsSection.style.display = 'none';
+        generatedBlobs = [];
+    }
+
+    // === Event Listeners: Mode Selection ===
+    btn3H.addEventListener('click', () => setupEditor('3H'));
+    btn3V.addEventListener('click', () => setupEditor('3V'));
+    btnGrid.addEventListener('click', () => setupEditor('GRID'));
+
+    function setupEditor(mode) {
+        currentMode = mode;
+        editorSection.style.display = 'block';
+        resultsSection.style.display = 'none';
+
+        // Set canvas dimensions to match loaded image
+        canvas.width = loadedImage.width;
+        canvas.height = loadedImage.height;
+
+        // Initialize guides based on mode (normalized 0.0 - 1.0)
+        hGuides = [];
+        vGuides = [];
+        if (mode === '3H') {
+            hGuides = [1/3, 2/3];
+        } else if (mode === '3V') {
+            vGuides = [1/3, 2/3];
+        } else if (mode === 'GRID') {
+            hGuides = [0.5];
+            vGuides = [0.5];
+        }
+
+        drawCanvas();
+    }
+
+    // === Canvas Drawing & Interaction ===
+
+    function drawCanvas() {
+        if (!loadedImage) return;
+        
+        // 1. Clear & Draw Image
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(loadedImage, 0, 0);
+
+        // 2. Set Guide styles
+        ctx.strokeStyle = 'cyan';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([5, 3]); // Dashed lines for better visibility
+
+        // 3. Draw Horizontal Guides
+        for (let pos of hGuides) {
+            const y = pos * canvas.height;
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+        }
+
+        // 4. Draw Vertical Guides
+        for (let pos of vGuides) {
+            const x = pos * canvas.width;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
+            ctx.stroke();
+        }
+    }
+
+    // Mouse Interaction for Dragging
+    canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        // Calculate scale factor in case canvas is displayed smaller than actual size via CSS
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const mouseX = (e.clientX - rect.left) * scaleX;
+        const mouseY = (e.clientY - rect.top) * scaleY;
+
+        // Check Horizontal guides hit
+        for (let i = 0; i < hGuides.length; i++) {
+            const y = hGuides[i] * canvas.height;
+            if (Math.abs(mouseY - y) < guideHitTolerance) {
+                isDragging = true;
+                draggedGuide = { type: 'h', index: i };
+                return;
+            }
+        }
+
+        // Check Vertical guides hit
+        for (let i = 0; i < vGuides.length; i++) {
+            const x = vGuides[i] * canvas.width;
+            if (Math.abs(mouseX - x) < guideHitTolerance) {
+                isDragging = true;
+                draggedGuide = { type: 'v', index: i };
+                return;
+            }
+        }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        // Change cursor if hovering over a guide
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const mouseX = (e.clientX - rect.left) * scaleX;
+        const mouseY = (e.clientY - rect.top) * scaleY;
+        
+        let cursor = 'crosshair';
+        if(!isDragging) {
+             for (let pos of hGuides) {
+                 if (Math.abs(mouseY - (pos * canvas.height)) < guideHitTolerance) cursor = 'row-resize';
+             }
+             for (let pos of vGuides) {
+                 if (Math.abs(mouseX - (pos * canvas.width)) < guideHitTolerance) cursor = 'col-resize';
+             }
+        }
+        canvas.style.cursor = cursor;
+
+        if (!isDragging || !draggedGuide) return;
+
+        if (draggedGuide.type === 'h') {
+            // Normalize new Y position, constrain within bounds
+            let newPos = mouseY / canvas.height;
+            newPos = Math.max(0.01, Math.min(0.99, newPos)); // Keep slightly inside
+            hGuides[draggedGuide.index] = newPos;
+        } else {
+             // Normalize new X position
+            let newPos = mouseX / canvas.width;
+            newPos = Math.max(0.01, Math.min(0.99, newPos));
+            vGuides[draggedGuide.index] = newPos;
+        }
+        drawCanvas();
+    });
+
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+        draggedGuide = null;
+    });
+
+    cancelBtn.addEventListener('click', resetUIState);
+
+
+    // === Generation & Slicing Logic ===
+
+    generateBtn.addEventListener('click', () => {
+        generatedBlobs = [];
+        const regions = calculateRegions();
+        
+        // Use an off-screen canvas to slice chunks
+        const sliceCanvas = document.createElement('canvas');
+        const sliceCtx = sliceCanvas.getContext('2d');
+
+        let processedCount = 0;
+
+        regions.forEach((region, index) => {
+            // Set small canvas to region size
+            sliceCanvas.width = region.w;
+            sliceCanvas.height = region.h;
+            
+            // Draw just that part of the source image onto small canvas
+            // drawImage(source, srcX, srcY, srcW, srcH, destX, destY, destW, destH)
+            sliceCtx.drawImage(
+                loadedImage, 
+                region.x, region.y, region.w, region.h, 
+                0, 0, region.w, region.h
+            );
+
+            // Convert to blob for download/display
+            sliceCanvas.toBlob((blob) => {
+                generatedBlobs.push({ blob, index });
+                processedCount++;
+                if (processedCount === regions.length) {
+                    // Ensure they stay in order
+                    generatedBlobs.sort((a, b) => a.index - b.index);
+                    displayResults();
+                }
+            }, 'image/png'); // Defaulting to PNG for simplicity
+        });
+    });
+
+    function calculateRegions() {
+        const w = canvas.width;
+        const h = canvas.height;
+        let regions = []; // {x, y, w, h}
+
+        // Sort guides to ensure correct slicing order
+        const sortedH = [0, ...hGuides.sort(), 1].map(p => p * h);
+        const sortedV = [0, ...vGuides.sort(), 1].map(p => p * w);
+
+        // Iterate through the grid defined by the guides
+        for (let i = 0; i < sortedH.length - 1; i++) {
+            const yStart = sortedH[i];
+            const yEnd = sortedH[i+1];
+            const height = yEnd - yStart;
+
+            for (let j = 0; j < sortedV.length - 1; j++) {
+                const xStart = sortedV[j];
+                const xEnd = sortedV[j+1];
+                const width = xEnd - xStart;
+
+                regions.push({ x: xStart, y: yStart, w: width, h: height });
+            }
+        }
+        return regions;
+    }
+
+
+    // === Display & Download ===
+
+    function displayResults() {
+        editorSection.style.display = 'none';
+        resultsSection.style.display = 'block';
+        thumbnailsContainer.innerHTML = '';
+
+        generatedBlobs.forEach((item, i) => {
+            const url = URL.createObjectURL(item.blob);
+            
+            const div = document.createElement('div');
+            div.className = 'thumbnail-item';
+            
+            const img = document.createElement('img');
+            img.src = url;
+            
+            const btn = document.createElement('button');
+            btn.textContent = `Download #${i+1}`;
+            btn.className = 'secondary';
+            btn.style.padding = '8px 12px';
+            btn.style.fontSize = '12px';
+            btn.onclick = () => downloadSingle(item.blob, i);
+
+            div.appendChild(img);
+            div.appendChild(btn);
+            thumbnailsContainer.appendChild(div);
+        });
+    }
+
+    function getBaseFilename() {
+        let template = templateInput.value.trim() || 'split-image';
+        // Remove invalid filename characters
+        template = template.replace(/[^a-z0-9_\-]/gi, '_');
+        const timestamp = new Date().getTime();
+        return `${template}_${timestamp}`;
+    }
+
+    function downloadSingle(blob, index) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `${getBaseFilename()}_part${index + 1}.png`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+    }
+
+    downloadAllBtn.addEventListener('click', () => {
+        // Trigger downloads sequentially with slight delay to prevent browser blocking
+        generatedBlobs.forEach((item, i) => {
+            setTimeout(() => {
+                 downloadSingle(item.blob, i);
+            }, i * 300);
+        });
+    });
+
+    newImageBtn.addEventListener('click', () => {
+        loadedImage = null;
+        fileInput.value = '';
+        btn3H.disabled = true;
+        btn3V.disabled = true;
+        btnGrid.disabled = true;
+        resetUIState();
+        window.scrollTo(0,0);
+    });
+
+</script>
+</body>
+</html>
