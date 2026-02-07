@@ -69,7 +69,10 @@
 <div class="max-w-4xl mx-auto p-4 flex flex-col h-screen">
     <header class="flex justify-between items-center mb-4">
         <h1 class="text-xl font-bold tracking-tight">Image Splitter</h1>
-        <button id="resetBtn" class="text-sm font-semibold text-slate-500 hover:text-red-500">Reset All</button>
+        <div class="flex gap-2">
+            <button id="viewPromptBtn" class="text-sm font-semibold text-blue-500 hover:text-blue-700">View AI Prompt</button>
+            <button id="resetBtn" class="text-sm font-semibold text-slate-500 hover:text-red-500">Reset All</button>
+        </div>
     </header>
 
     <!-- Upload State -->
@@ -325,6 +328,29 @@
         }
     };
 </script>
+
+    <div id="promptModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg max-w-lg w-full mx-4">
+            <h2 class="text-xl font-bold mb-4">🤖 AI Prompt (Google Gemini)</h2>
+            <pre id="promptText" class="whitespace-pre-wrap text-sm"></pre>
+            <button onclick="closeModal()" class="mt-4 bg-red-500 text-white px-4 py-2 rounded">Close</button>
+        </div>
+    </div>
+
+    <script>
+        const prompts = {
+            "photo_splitter_mobile": "Build an artifact that lets me split a photo into several subphotos of equal size.\n\nThere needs to be a field in which the user can select the photo (upload from computer or paste).\nThere needs to be a field with a template for name of resulting subphotos\n\nThen the user has three options to split the photos:\n3 photos horizontal split\n3 photos vertical split\n4 photos\n\nAfter one of these three options is selected the user will be able to review the result before each photo is saved (some guidelines will be overimposed to the original photoo). It will be possible to adjust the guidelines horizontally and vertically as appropriate)\n\nOnce reviewed it will be possible for the user to download each single photo. The name of the files will include the template provided previously by the user plus a string with time stamp to avoid duplications and overwriting existing files.\n\nNo React.\n\n\n\nThis is great. For this to be usable in a mobile device, the gridlines should have handles, maybe outside the photo area. It should also be possible to zoom in and zoom out.\n\nthe zoom functionality works, it is not posible to interact with the handles. Let's try another approach, instead of three preset options, add buttons to add horizontal and vertical guidelines. Once created it should be possible to locate them appropriately. The end result is a matrix of h rows and v columns (h is number of horizontal guidelines plus 1, v is number of vertical guidelines plus 1)."
+        };
+
+        document.getElementById('viewPromptBtn').addEventListener('click', function() {
+            document.getElementById('promptText').textContent = prompts.photo_splitter_mobile;
+            document.getElementById('promptModal').classList.remove('hidden');
+        });
+
+        function closeModal() {
+            document.getElementById('promptModal').classList.add('hidden');
+        }
+    </script>
 
 </body>
 </html>

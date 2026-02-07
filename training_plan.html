@@ -20,6 +20,7 @@
         <header class="mb-10 text-center">
             <h1 class="text-4xl font-extrabold text-slate-800 tracking-tight mb-2">Training Plan Creator</h1>
             <p class="text-slate-600">Plan backwards from your race date and export to your calendar.</p>
+            <button id="viewPromptBtn" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition">View AI Prompt</button>
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -258,5 +259,29 @@
             document.body.removeChild(link);
         }
     </script>
+
+    <div id="promptModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg max-w-lg w-full mx-4">
+            <h2 class="text-xl font-bold mb-4">🤖 AI Prompt (Google Gemini)</h2>
+            <pre id="promptText" class="whitespace-pre-wrap text-sm"></pre>
+            <button onclick="closeModal()" class="mt-4 bg-red-500 text-white px-4 py-2 rounded">Close</button>
+        </div>
+    </div>
+
+    <script>
+        const prompts = {
+            "training_plan": "Build an artifact that lets me create calendar entries (ics file) for a training plan back from an input date.\nThere needs to be a field in which the user can select the date of the race.\nThere needs to be a field in which the user can select the number of weeks of the training plan. This must be an integer. Next to this there will be a button which auto generates empty cells, one for each day, ie if user has selected 5 weeks then there will be 35 empty cells\nThere needs to be a text field in which the user can paste tab separated text (for example from an excel file) or text in which each cell is delimited by inverted commas (\"). The placeholder text should inform the user of what can be pasted.\nThe artifact will then generate calendar entries (ics file) for each day in the plan back from the date of the race. Each day is either a \"Rest day\" or a day in which you have to run or walk (or both). Rest days can be dismissed.\nFor each day in which there is a walk or run planned there is small text with a description.\nIt will be possible for the user to download those ics file. No React.\nAs an example, if the selected date is April 26 2026, then the plan will start 16 weeks before."
+        };
+
+        document.getElementById('viewPromptBtn').addEventListener('click', function() {
+            document.getElementById('promptText').textContent = prompts.training_plan;
+            document.getElementById('promptModal').classList.remove('hidden');
+        });
+
+        function closeModal() {
+            document.getElementById('promptModal').classList.add('hidden');
+        }
+    </script>
+
 </body>
 </html>

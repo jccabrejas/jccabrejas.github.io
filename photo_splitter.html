@@ -33,6 +33,17 @@
 
         h1 { text-align: center; margin-bottom: 25px; }
 
+        #viewPromptBtn {
+            display: block;
+            margin: 0 auto 25px;
+            padding: 10px 20px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
         .control-group { margin-bottom: 20px; }
         .control-group label { display: block; margin-bottom: 8px; font-weight: 600; }
         .control-group input[type="text"], .control-group input[type="file"] {
@@ -118,6 +129,7 @@
 
     <div class="container">
         <h1>Image Splitter</h1>
+        <button id="viewPromptBtn">View AI Prompt</button>
 
         <div class="control-group">
             <label for="fileInput">1. Select Photo</label>
@@ -511,5 +523,29 @@
     });
 
 </script>
+
+    <div id="promptModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: white; padding: 20px; border-radius: 8px; max-width: 500px; width: 90%;">
+            <h2>🤖 AI Prompt (Google Gemini)</h2>
+            <pre id="promptText" style="white-space: pre-wrap; font-size: 14px;"></pre>
+            <button onclick="closeModal()" style="margin-top: 10px; padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 4px;">Close</button>
+        </div>
+    </div>
+
+    <script>
+        const prompts = {
+            "photo_splitter": "Build an artifact that lets me split a photo into several subphotos of equal size.\n\nThere needs to be a field in which the user can select the photo (upload from computer or paste).\nThere needs to be a field with a template for name of resulting subphotos\n\nThen the user has three options to split the photos:\n3 photos horizontal split\n3 photos vertical split\n4 photos\n\nAfter one of these three options is selected the user will be able to review the result before each photo is saved (some guidelines will be overimposed to the original photoo). It will be possible to adjust the guidelines horizontally and vertically as appropriate)\n\nOnce reviewed it will be possible for the user to download each single photo. The name of the files will include the template provided previously by the user plus a string with time stamp to avoid duplications and overwriting existing files.\n\nNo React."
+        };
+
+        document.getElementById('viewPromptBtn').addEventListener('click', function() {
+            document.getElementById('promptText').textContent = prompts.photo_splitter;
+            document.getElementById('promptModal').style.display = 'flex';
+        });
+
+        function closeModal() {
+            document.getElementById('promptModal').style.display = 'none';
+        }
+    </script>
+
 </body>
 </html>
