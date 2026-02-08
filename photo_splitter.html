@@ -4,173 +4,67 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image Splitter Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root {
-            --primary-color: #007bff;
-            --bg-color: #f4f7f6;
-            --text-color: #333;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .container {
-            background: #fff;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 900px;
-        }
-
-        h1 { text-align: center; margin-bottom: 25px; }
-
-        #viewPromptBtn {
-            display: block;
-            margin: 0 auto 25px;
-            padding: 10px 20px;
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-
-        .control-group { margin-bottom: 20px; }
-        .control-group label { display: block; margin-bottom: 8px; font-weight: 600; }
-        .control-group input[type="text"], .control-group input[type="file"] {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            box-sizing: border-box;
-        }
-
-        .paste-area {
-            border: 2px dashed #ccc;
-            padding: 20px;
-            text-align: center;
-            color: #777;
-            border-radius: 6px;
-            margin-top: 10px;
-            background: #fafafa;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-bottom: 25px;
-        }
-
-        button {
-            padding: 12px 20px;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: background-color 0.2s;
-        }
-        button:hover { background-color: #0056b3; }
-        button.secondary { background-color: #6c757d; }
-        button.secondary:hover { background-color: #545b62; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-
-        #editor-section, #results-section { display: none; /* Hidden initially */ }
-
-        .canvas-container {
-            width: 100%;
-            overflow: auto;
-            border: 2px solid #eee;
-            position: relative;
-            /* Max height for scrollability on tall images */
-            max-height: 70vh; 
-            cursor: crosshair;
-        }
-        
-        /* Canvas needs to be block to avoid bottom spacing issues */
-        canvas { display: block; }
-
-        .thumbnails-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .thumbnail-item {
-            text-align: center;
-            border: 1px solid #eee;
-            padding: 10px;
-            border-radius: 8px;
-        }
-
-        .thumbnail-item img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 4px;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
+        .day-card { transition: all 0.2s ease; }
+        .day-card:hover { transform: translateY(-2px); }
+        .rest-day { background-color: #f3f4f6; color: #9ca3af; }
+        .active-day { background-color: #ffffff; border-left: 4px solid #3b82f6; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     </style>
 </head>
-<body>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-900">
 
-    <div class="container">
-        <h1>Image Splitter</h1>
-        <button id="viewPromptBtn">View AI Prompt</button>
+    <div class="max-w-5xl mx-auto py-10 px-4">
+        <header class="mb-10 text-center">
+            <h1 class="text-4xl font-extrabold text-slate-800 tracking-tight mb-2">Image Splitter Tool</h1>
+            <p class="text-slate-600">Split photos into multiple parts with predefined settings.</p>
+            <button id="viewPromptBtn" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition">View AI Prompt</button>
+        </header>
 
-        <div class="control-group">
-            <label for="fileInput">1. Select Photo</label>
-            <input type="file" id="fileInput" accept="image/*">
-            <div class="paste-area">or paste an image here (Ctrl+V / Cmd+V)</div>
-        </div>
-
-        <div class="control-group">
-            <label for="fileNameTemplate">2. Filename Template</label>
-            <input type="text" id="fileNameTemplate" placeholder="e.g., my-vacation-split" value="split-image">
-        </div>
-
-        <div class="control-group">
-            <label>3. Choose Split Mode</label>
-            <div class="btn-group">
-                <button id="btn3H" disabled>3 Horizontal Strips</button>
-                <button id="btn3V" disabled>3 Vertical Strips</button>
-                <button id="btnGrid" disabled>4 Photos (2x2 Grid)</button>
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div class="control-group mb-6">
+                <label for="fileInput" class="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">1. Select Photo</label>
+                <input type="file" id="fileInput" accept="image/*" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                <div class="paste-area border-2 border-dashed border-slate-300 p-4 text-center text-slate-400 bg-slate-50 rounded-xl mt-2">or paste an image here (Ctrl+V / Cmd+V)</div>
             </div>
-        </div>
 
-        <div id="editor-section">
-            <h3>Review and Adjust Guidelines</h3>
-            <p style="color: #666; font-size: 0.9em;">Drag the cyan lines to adjust cuts.</p>
-            <div class="canvas-container">
-                <canvas id="imageCanvas"></canvas>
+            <div class="control-group mb-6">
+                <label for="fileNameTemplate" class="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">2. Filename Template</label>
+                <input type="text" id="fileNameTemplate" placeholder="e.g., my-vacation-split" value="split-image" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
-            <div class="btn-group" style="margin-top: 20px;">
-                <button id="generateBtn">Generate Subphotos</button>
-                <button id="cancelBtn" class="secondary">Cancel</button>
-            </div>
-        </div>
 
-        <div id="results-section">
-            <h3>Results</h3>
-            <div class="btn-group">
-                 <button id="downloadAllBtn">Download All</button>
-                 <button id="newImageBtn" class="secondary">Start Over</button>
-            </div>
-            <div class="thumbnails-grid" id="thumbnailsContainer">
+            <div class="control-group mb-6">
+                <label class="block text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">3. Choose Split Mode</label>
+                <div class="flex gap-2 justify-center">
+                    <button id="btn3H" disabled class="bg-slate-400 text-white px-4 py-2 rounded-xl font-bold hover:bg-slate-500 transition disabled:bg-slate-200">3 Horizontal Strips</button>
+                    <button id="btn3V" disabled class="bg-slate-400 text-white px-4 py-2 rounded-xl font-bold hover:bg-slate-500 transition disabled:bg-slate-200">3 Vertical Strips</button>
+                    <button id="btnGrid" disabled class="bg-slate-400 text-white px-4 py-2 rounded-xl font-bold hover:bg-slate-500 transition disabled:bg-slate-200">4 Photos (2x2 Grid)</button>
                 </div>
+            </div>
+
+            <div id="editor-section" class="hidden space-y-4">
+                <h3 class="text-lg font-bold text-slate-800">Review and Adjust Guidelines</h3>
+                <p class="text-slate-600 text-sm">Drag the cyan lines to adjust cuts.</p>
+                <div class="canvas-container border-2 border-slate-200 rounded-xl overflow-auto max-h-96 cursor-crosshair">
+                    <canvas id="imageCanvas" class="block"></canvas>
+                </div>
+                <div class="flex gap-2 justify-center">
+                    <button id="generateBtn" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-500 transition">Generate Subphotos</button>
+                    <button id="cancelBtn" class="bg-slate-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-slate-400 transition">Cancel</button>
+                </div>
+            </div>
+
+            <div id="results-section" class="hidden space-y-4">
+                <h3 class="text-lg font-bold text-slate-800">Results</h3>
+                <div class="flex gap-2 justify-center">
+                    <button id="downloadAllBtn" class="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-500 transition">Download All</button>
+                    <button id="newImageBtn" class="bg-slate-500 text-white px-4 py-2 rounded-xl font-bold hover:bg-slate-400 transition">Start Over</button>
+                </div>
+                <div class="thumbnails-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="thumbnailsContainer">
+                </div>
+            </div>
         </div>
     </div>
 
@@ -242,14 +136,23 @@
 
     function enableModeButtons() {
         btn3H.disabled = false;
+        btn3H.className = 'bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-500 transition';
         btn3V.disabled = false;
+        btn3V.className = 'bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-500 transition';
         btnGrid.disabled = false;
+        btnGrid.className = 'bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-500 transition';
     }
 
     function resetUIState() {
-        editorSection.style.display = 'none';
-        resultsSection.style.display = 'none';
+        editorSection.classList.add('hidden');
+        resultsSection.classList.add('hidden');
         generatedBlobs = [];
+        btn3H.disabled = true;
+        btn3H.className = 'bg-slate-400 text-white px-4 py-2 rounded-xl font-bold disabled:bg-slate-200';
+        btn3V.disabled = true;
+        btn3V.className = 'bg-slate-400 text-white px-4 py-2 rounded-xl font-bold disabled:bg-slate-200';
+        btnGrid.disabled = true;
+        btnGrid.className = 'bg-slate-400 text-white px-4 py-2 rounded-xl font-bold disabled:bg-slate-200';
     }
 
     // === Event Listeners: Mode Selection ===
@@ -259,8 +162,8 @@
 
     function setupEditor(mode) {
         currentMode = mode;
-        editorSection.style.display = 'block';
-        resultsSection.style.display = 'none';
+        editorSection.classList.remove('hidden');
+        resultsSection.classList.add('hidden');
 
         // Set canvas dimensions to match loaded image
         canvas.width = loadedImage.width;
@@ -455,24 +358,23 @@
     // === Display & Download ===
 
     function displayResults() {
-        editorSection.style.display = 'none';
-        resultsSection.style.display = 'block';
+        editorSection.classList.add('hidden');
+        resultsSection.classList.remove('hidden');
         thumbnailsContainer.innerHTML = '';
 
         generatedBlobs.forEach((item, i) => {
             const url = URL.createObjectURL(item.blob);
             
             const div = document.createElement('div');
-            div.className = 'thumbnail-item';
+            div.className = 'thumbnail-item text-center border border-slate-200 p-4 rounded-xl';
             
             const img = document.createElement('img');
             img.src = url;
+            img.className = 'w-full h-auto rounded-lg mb-2 shadow-sm';
             
             const btn = document.createElement('button');
             btn.textContent = `Download #${i+1}`;
-            btn.className = 'secondary';
-            btn.style.padding = '8px 12px';
-            btn.style.fontSize = '12px';
+            btn.className = 'bg-slate-500 text-white px-3 py-1 rounded font-bold hover:bg-slate-400 transition text-sm';
             btn.onclick = () => downloadSingle(item.blob, i);
 
             div.appendChild(img);
@@ -524,11 +426,11 @@
 
 </script>
 
-    <div id="promptModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
-        <div style="background: white; padding: 20px; border-radius: 8px; max-width: 500px; width: 90%;">
-            <h2>🤖 AI Prompt (Google Gemini)</h2>
-            <pre id="promptText" style="white-space: pre-wrap; font-size: 14px;"></pre>
-            <button onclick="closeModal()" style="margin-top: 10px; padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 4px;">Close</button>
+    <div id="promptModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg max-w-lg w-full mx-4">
+            <h2 class="text-xl font-bold mb-4">🤖 AI Prompt (Google Gemini)</h2>
+            <pre id="promptText" class="whitespace-pre-wrap text-sm max-h-80 overflow-y-auto"></pre>
+            <button onclick="closeModal()" class="mt-4 bg-red-500 text-white px-4 py-2 rounded">Close</button>
         </div>
     </div>
 
@@ -539,11 +441,11 @@
 
         document.getElementById('viewPromptBtn').addEventListener('click', function() {
             document.getElementById('promptText').textContent = prompts.photo_splitter;
-            document.getElementById('promptModal').style.display = 'flex';
+            document.getElementById('promptModal').classList.remove('hidden');
         });
 
         function closeModal() {
-            document.getElementById('promptModal').style.display = 'none';
+            document.getElementById('promptModal').classList.add('hidden');
         }
     </script>
 
